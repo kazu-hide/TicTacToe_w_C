@@ -112,21 +112,27 @@ void displayThanksMessage(void) {
     printf("================================\n");
 }
 
+BOOL isQuitMove(Move move) {
+    return (move.row == QUIT_MOVE_ROW && move.col == QUIT_MOVE_COL) ? TRUE : FALSE;
+}
+
 Move getPlayerInput() {
     Move move = {0, 0};
+    Move quitMove = {QUIT_MOVE_ROW, QUIT_MOVE_COL};
     char input[8];
 
     while (TRUE)
     {
         printf("Please input row,col (or 'q' to quit): ");
-        
+
+        // EOF (Ctrl-D やパイプ入力の終了) の場合、これ以上入力は得られない
         if (fgets(input, sizeof(input), stdin) == NULL) {
-            continue;
+            printf("\n");
+            return quitMove;
         }
 
         if (input[0] == 'q' || strcmp(input, "quit\n") == 0) {
-            printf("\tGame Ended.\n");
-            exit(0);
+            return quitMove;
         }
 
         if (sscanf(input, " %d , %d ", &move.row, &move.col) != 2 && sscanf(input, " %d %d ", &move.row, &move.col) != 2) {
@@ -148,12 +154,20 @@ MODE selectGameMode() {
         printf("2. Player vs CPU\n");
         printf("3. CPU vs CPU\n");
         printf("Enter mode (1-3): ");
-        
-        if (scanf("%d", &mode) == 1 && mode >= PLAYER_PLAYER && mode <= CPU_CPU) {
+
+        int scanned = scanf("%d", &mode);
+
+        // EOF の場合、これ以上入力は得られない
+        if (scanned == EOF) {
+            printf("\n");
+            return MODE_QUIT;
+        }
+
+        if (scanned == 1 && mode >= PLAYER_PLAYER && mode <= CPU_CPU) {
             clearInputBuffer();
             return (MODE)mode;
         }
-        
+
         printf("Invalid input. Please try again.\n");
         clearInputBuffer();
     }
@@ -171,19 +185,26 @@ void announceResult(const Game* game) {
         case GAME_DRAW:
             printf("The game ended in a draw!\n");
             break;
+        case GAME_QUIT:
+            printf("\tGame Ended.\n");
+            break;
         default:
             printf("[Error] Unexpected game state!\n");
     }
 }
 
 BOOL askForRematch(void) {
-    char response;
+    char response = '\0';
     printf("\nWould you like to play again? (y/n): ");
-    
+
     while (1) {
-        scanf(" %c", &response);
+        // EOF などで文字が読めない場合は、再戦しないものとして扱う
+        if (scanf(" %c", &response) != 1) {
+            printf("\n");
+            return FALSE;
+        }
         clearInputBuffer();
-        
+
         if (response == 'y' || response == 'Y') {
             return TRUE;
         } else if (response == 'n' || response == 'N') {

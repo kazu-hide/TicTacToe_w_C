@@ -140,6 +140,71 @@ void testGetPlayerInputWithoutSpace(TestResults* results) {
     test_end("GetPlayerInputWithoutSpace");
 }
 
+void testGetPlayerInputReturnsQuitOnEof(TestResults* results) {
+    test_begin("GetPlayerInputReturnsQuitOnEof");
+
+    // 入力が尽きた (EOF) 場合、プロンプトを出し続けるのではなく終了を返す
+    FILE* stdin_backup = stdin;
+    stdin = fopen("/dev/null", "r");
+
+    Move move = getPlayerInput();
+
+    test_assert(isQuitMove(move) == TRUE,
+                "EOF should be reported as a quit move", results);
+
+    fclose(stdin);
+    stdin = stdin_backup;
+
+    test_end("GetPlayerInputReturnsQuitOnEof");
+}
+
+void testGetPlayerInputReturnsQuitOnQ(TestResults* results) {
+    test_begin("GetPlayerInputReturnsQuitOnQ");
+
+    char input[] = "q\n";
+    FILE* stdin_backup = stdin;
+    stdin = fmemopen(input, sizeof(input), "r");
+
+    Move move = getPlayerInput();
+
+    test_assert(isQuitMove(move) == TRUE,
+                "'q' should be reported as a quit move", results);
+
+    stdin = stdin_backup;
+
+    test_end("GetPlayerInputReturnsQuitOnQ");
+}
+
+void testAskForRematchReturnsFalseOnEof(TestResults* results) {
+    test_begin("AskForRematchReturnsFalseOnEof");
+
+    FILE* stdin_backup = stdin;
+    stdin = fopen("/dev/null", "r");
+
+    test_assert(askForRematch() == FALSE,
+                "EOF should end the rematch loop", results);
+
+    fclose(stdin);
+    stdin = stdin_backup;
+
+    test_end("AskForRematchReturnsFalseOnEof");
+}
+
+void testSelectGameModeReturnsQuitOnEof(TestResults* results) {
+    test_begin("SelectGameModeReturnsQuitOnEof");
+
+    FILE* stdin_backup = stdin;
+    stdin = fopen("/dev/null", "r");
+
+    test_assert(selectGameMode() == MODE_QUIT,
+                "EOF should end the mode selection loop", results);
+
+    fclose(stdin);
+    stdin = stdin_backup;
+
+    test_end("SelectGameModeReturnsQuitOnEof");
+}
+
 void runUiTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("UI Tests");
@@ -151,7 +216,11 @@ void runUiTests() {
     testGetPlayerInputWithoutComma(&results);
     testGetPlayerInputWithSpace(&results);
     testGetPlayerInputWithoutSpace(&results);
-    
+    testGetPlayerInputReturnsQuitOnEof(&results);
+    testGetPlayerInputReturnsQuitOnQ(&results);
+    testAskForRematchReturnsFalseOnEof(&results);
+    testSelectGameModeReturnsQuitOnEof(&results);
+
     restore_output();
     
     test_suite_end("UI Tests", &results);

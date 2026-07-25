@@ -5,7 +5,7 @@
 #include "queue.h"
 #include "game.h"
 
-void playGame(int mode);
+GameState playGame(MODE mode);
 char getWinner(Board *board);
 BOOL __isDrawGame(Board *board);
 
@@ -54,6 +54,11 @@ Move getPlayerMove(Game *game) {
     {
         Move move = getPlayerInput();
         printf("row %d, col %d", move.row, move.col);
+
+        // 入力の終了は検証せずそのまま呼び出し元へ返す
+        if (isQuitMove(move))
+            return move;
+
         if (isValidMove(&game->board, move.row, move.col, game->currentPlayer))
         {
             return move;
@@ -93,13 +98,20 @@ void playTurn(Game* game) {
         move = getPlayerMove(game);
     }
 
+    // プレイヤーが 'q' を入力した、または入力が EOF に達した場合
+    if (isQuitMove(move)) {
+        game->gameState = GAME_QUIT;
+        announceResult(game);
+        return;
+    }
+
     applyMove(game, move);
     updateGameState(game, move);
     printBoard(game);
     announceResult(game);
 }
 
-void playGame(int mode)
+GameState playGame(MODE mode)
 {
 
     Game game = initGame(mode);
@@ -114,17 +126,20 @@ void playGame(int mode)
             switchPlayer(&game);
         }
     }
+    return game.gameState;
 }
 
 void runGameLoop() {
     while (TRUE) {
         MODE mode = selectGameMode();
-
-        playGame(mode);
-
-        if (!askForRematch()) {
-            displayThanksMessage();
+        if (mode == MODE_QUIT)
             break;
-        }
+
+        if (playGame(mode) == GAME_QUIT)
+            break;
+
+        if (!askForRematch())
+            break;
     }
+    displayThanksMessage();
 }
