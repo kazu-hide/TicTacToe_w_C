@@ -39,6 +39,20 @@ BOOL isInBoard(int r, int c) {
     return FALSE;
 }
 
+// 着手可能な点 (空点かつ禁じ手でない点) が1つでも存在するかの判定関数。
+// 白には禁じ手が無いため、白の場合は空点があるかどうかと同義になる。
+BOOL hasLegalMove(Board *board, char playerMark) {
+    for (int r = 1; r <= BOARD_ROWS; r++) {
+        for (int c = 1; c <= BOARD_COLUMNS; c++) {
+            if (board->cells[r][c] != EMPTY_CELL)
+                continue;
+            if (!isProhibitedMove(board, r, c, playerMark))
+                return TRUE;
+        }
+    }
+    return FALSE;
+}
+
 // 特定の方向の連続した石の数を数える共通関数
 static int countContinuousStones(Board *board, int r, int c, int dx, int dy, char playerMark) {
     int length = 1;  // 置いた石から開始

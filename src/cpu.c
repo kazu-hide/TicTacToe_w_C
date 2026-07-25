@@ -68,9 +68,10 @@ int negaMax(Board *board, int depth, char playerMark, int lastRow, int lastCol, 
         }
     }
 
-    // 合法手が1つも無い場合は番兵を返さず、現局面の評価値を返す
+    // 合法手が1つも無い場合 (空点は残っているが全て禁じ手)、
+    // 手番側の負けが確定している (docs/renju-rules.md)
     if (maxScore == NO_LEGAL_MOVE_SCORE)
-        return evaluate(board, playerMark);
+        return -(TERMINAL_WIN_SCORE + depth);
 
     return maxScore;
 }

@@ -191,6 +191,79 @@ void testGetPlayerMoveDoesNotPrintDebugOutput(TestResults* results) {
     test_end("GetPlayerMoveDoesNotPrintDebugOutput");
 }
 
+// 空点が (4,9) だけで、そこは黒にとって長連になる禁じ手の局面
+static void setUpBlackTrappedBoard(Game* game) {
+    const char *trapped[] = {
+            NULL,
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOO.",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX"
+        };
+    initBoardWithStr(&game->board, trapped);
+    game->moveCount = 1;
+    game->handHistory[0].move.row = 9;
+    game->handHistory[0].move.col = BOARD_COLUMNS;
+    game->handHistory[0].player = PLAYER_O;
+}
+
+void testBlackLosesWhenNoLegalMoveRemains(TestResults* results) {
+    test_begin("BlackLosesWhenNoLegalMoveRemains");
+
+    // docs/renju-rules.md の確定仕様:
+    // 手番側に合法手が1つも無い場合はその手番側の負け。
+    // 黒は禁点に打たされたものとみなし、白の勝ちになる。
+    Game game = initGame(CPU_CPU);
+    setUpBlackTrappedBoard(&game);
+    game.currentPlayer = PLAYER_X;
+
+    playTurn(&game);
+
+    test_assert(game.gameState == GAME_WIN,
+                "Game should end when black has no legal move", results);
+    test_assert(game.winner == PLAYER_O,
+                "White should win when black is forced onto a forbidden point", results);
+
+    test_end("BlackLosesWhenNoLegalMoveRemains");
+}
+
+void testFullBoardIsDrawNotLoss(TestResults* results) {
+    test_begin("FullBoardIsDrawNotLoss");
+
+    // 満局は「合法手が無い」より先に引き分けと判定されること
+    const char *full[] = {
+            NULL,
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX"
+        };
+    Game game = initGame(CPU_CPU);
+    initBoardWithStr(&game.board, full);
+    game.moveCount = 1;
+    game.handHistory[0].move.row = 9;
+    game.handHistory[0].move.col = BOARD_COLUMNS;
+    game.handHistory[0].player = PLAYER_O;
+    game.currentPlayer = PLAYER_X;
+
+    playTurn(&game);
+
+    test_assert(game.gameState == GAME_DRAW,
+                "Full board should be a draw", results);
+
+    test_end("FullBoardIsDrawNotLoss");
+}
+
 void runGameTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("Game Tests");
@@ -205,6 +278,8 @@ void runGameTests() {
     testValidateInputFailedOutOfRange(&results);
     testValidateInputFailedNotEmpty(&results);
     testGetPlayerMoveDoesNotPrintDebugOutput(&results);
+    testBlackLosesWhenNoLegalMoveRemains(&results);
+    testFullBoardIsDrawNotLoss(&results);
 
     restore_output();
 

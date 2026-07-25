@@ -5,6 +5,7 @@
 void initBoard(Board *board);
 BOOL boardIsFull(Board *board);
 BOOL isInBoard(int r, int c);
+BOOL hasLegalMove(Board *board, char playerMark);
 BOOL isWinMove(Board *board, int r, int c, char playerMark);
 BOOL isMakingOverLine(Board *board, int r, int c, char playerMark);
 BOOL isOpenLine(Board *board, Cell start, Cell end, Direction dir);

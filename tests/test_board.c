@@ -1010,6 +1010,61 @@ void testIsMakingDoubleThree(TestResults* results) {
     test_end("IsMakingDoubleThree");
 }
 
+void testHasLegalMove(TestResults* results) {
+    test_begin("HasLegalMove");
+
+    Board board = __prepareBoard();
+    test_assert(hasLegalMove(&board, PLAYER_X) == TRUE,
+                "Empty board should have legal moves for black", results);
+    test_assert(hasLegalMove(&board, PLAYER_O) == TRUE,
+                "Empty board should have legal moves for white", results);
+
+    // 空点が (4,9) だけで、そこは黒にとって長連になる禁じ手。
+    // 白には禁じ手が無いので白は打てる。
+    const char *trapped[] = {
+            NULL,
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOO.",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX"
+        };
+    initBoardWithStr(&board, trapped);
+
+    test_assert(isProhibitedMove(&board, 4, BOARD_COLUMNS, PLAYER_X) == TRUE,
+                "Test setup: the only empty cell should be prohibited for black", results);
+    test_assert(hasLegalMove(&board, PLAYER_X) == FALSE,
+                "Black should have no legal move when every empty cell is prohibited", results);
+    test_assert(hasLegalMove(&board, PLAYER_O) == TRUE,
+                "White has no forbidden moves, so an empty cell is always legal", results);
+
+    // 満局
+    const char *full[] = {
+            NULL,
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX"
+        };
+    initBoardWithStr(&board, full);
+
+    test_assert(hasLegalMove(&board, PLAYER_X) == FALSE,
+                "Full board should have no legal move for black", results);
+    test_assert(hasLegalMove(&board, PLAYER_O) == FALSE,
+                "Full board should have no legal move for white", results);
+
+    test_end("HasLegalMove");
+}
+
 void runBoardTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("Board Tests");
@@ -1029,6 +1084,7 @@ void runBoardTests() {
     testIsMakingGreatFour(&results);
     testIsThree(&results);
     testIsMakingDoubleThree(&results);
+    testHasLegalMove(&results);
     
     restore_output();
     

@@ -122,6 +122,10 @@ void displayGameRules(void) {
 }
 
 
+void announceNoLegalMove(char player) {
+    printf("Player %c has no legal move left. Every empty point is a forbidden move.\n", player);
+}
+
 void displayThanksMessage(void) {
     printf("\n\tThanks for playing!\n\n");
     printf("================================\n");

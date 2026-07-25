@@ -7,6 +7,7 @@
 Move getPlayerInput();
 BOOL isQuitMove(Move move);
 void displayThanksMessage(void);
+void announceNoLegalMove(char player);
 void printBoard(Game *game);
 void announceResult(const Game *game);
 void printGameStatus(int turnCounts, char player);
