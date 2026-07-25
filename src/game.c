@@ -10,7 +10,9 @@ char getWinner(Board *board);
 BOOL __isDrawGame(Board *board);
 
 Game initGame(MODE mode) {
-    Game game;
+    // handHistory を含む全メンバを 0 で初期化する。
+    // 未初期化のまま参照されることを防ぐ
+    Game game = {0};
     initBoard(&(game.board));
     game.currentPlayer = PLAYER_X;
     game.gameState = GAME_PLAYING;
