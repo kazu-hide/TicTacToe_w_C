@@ -155,6 +155,42 @@ void testValidateInputFailedNotEmpty(TestResults* results) {
 
 
 
+void testGetPlayerMoveDoesNotPrintDebugOutput(TestResults* results) {
+    test_begin("GetPlayerMoveDoesNotPrintDebugOutput");
+
+    Game game = initGame(PLAYER_PLAYER);
+
+    char input[] = "5,5\n";
+    FILE* stdin_backup = stdin;
+    stdin = fmemopen(input, sizeof(input), "r");
+
+    const char* path = "test_get_player_move_output.txt";
+    FILE* fp = fopen(path, "w");
+    FILE* stdout_backup = stdout;
+    stdout = fp;
+    Move move = getPlayerMove(&game);
+    stdout = stdout_backup;
+    fclose(fp);
+
+    stdin = stdin_backup;
+
+    char output[512] = "";
+    fp = fopen(path, "r");
+    if (fp) {
+        size_t read = fread(output, 1, sizeof(output) - 1, fp);
+        output[read] = '\0';
+        fclose(fp);
+    }
+    remove(path);
+
+    test_assert(move.row == 5 && move.col == 5,
+                "Should return the entered move", results);
+    test_assert(strstr(output, "row 5, col 5") == NULL,
+                "Should not print debug output for the entered move", results);
+
+    test_end("GetPlayerMoveDoesNotPrintDebugOutput");
+}
+
 void runGameTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("Game Tests");
@@ -168,7 +204,8 @@ void runGameTests() {
     testValidateInputExpectedRange(&results);
     testValidateInputFailedOutOfRange(&results);
     testValidateInputFailedNotEmpty(&results);
-    
+    testGetPlayerMoveDoesNotPrintDebugOutput(&results);
+
     restore_output();
 
     test_suite_end("Game Tests", &results);
