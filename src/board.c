@@ -173,15 +173,18 @@ BOOL isOpenLine(Board *board, Cell start, Cell end, Direction dir) {
 
 BOOL isAtLeastHalfOpenLine(Board *board, Cell start, Cell end, Direction dir) {
     // ラインとして少なくとも片側が空いているかどうかの判定関数
+    // 盤外のセルは「空いている」とはみなさない。
+    // 各サイドごとに盤内かを確認してから参照する（片側だけ盤外のケースがあるため）
 
-    // 両サイドが盤面外の場合
-    if (!isInBoard(start.r - dir.dx, start.c - dir.dy) && !isInBoard(end.r + dir.dx, end.c + dir.dy))
-        return FALSE;
+    Cell prev = {.r = start.r - dir.dx, .c = start.c - dir.dy};
+    Cell next = {.r = end.r + dir.dx, .c = end.c + dir.dy};
 
-    return (
-        board->cells[start.r - dir.dx][start.c - dir.dy] == EMPTY_CELL ||
-        board->cells[end.r + dir.dx][end.c + dir.dy] == EMPTY_CELL
-        );
+    BOOL isPrevOpen = isInBoard(prev.r, prev.c) &&
+                      board->cells[prev.r][prev.c] == EMPTY_CELL;
+    BOOL isNextOpen = isInBoard(next.r, next.c) &&
+                      board->cells[next.r][next.c] == EMPTY_CELL;
+
+    return (isPrevOpen || isNextOpen) ? TRUE : FALSE;
 }
 
 

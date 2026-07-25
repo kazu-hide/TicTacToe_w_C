@@ -399,6 +399,63 @@ void testIsHalfOpenLine(TestResults* results) {
     test_end("IsHalfOpenLine");
 }
 
+void testIsHalfOpenLineAtBoardEdge(TestResults* results) {
+    test_begin("IsHalfOpenLineAtBoardEdge");
+
+    // 盤の上端に接するライン。上側 (0行目) は盤外、下側 (5,9) は O が塞いでいるので
+    // 「少なくとも片側が空いている」は成立しない。
+    Board board;
+    const char *testBoard[] = {
+            NULL,
+            "........X",
+            "........X",
+            "........X",
+            "........X",
+            "........O",
+            ".........",
+            ".........",
+            ".........",
+            "........."
+        };
+    initBoardWithStr(&board, testBoard);
+
+    // initBoard() は 1..BOARD_ROWS しか初期化しないため 0 行目は不定値になる。
+    // 盤外セルを参照していないことを確実に検証するため、空きマスに見える値を入れておく。
+    for (int c = 0; c <= BOARD_COLUMNS; c++) {
+        board.cells[0][c] = EMPTY_CELL;
+    }
+
+    Cell topStart = {.r = 1, .c = 9};
+    Cell topEnd = {.r = 4, .c = 9};
+    Direction dir = {.dx = 1, .dy = 0};
+
+    test_assert(isAtLeastHalfOpenLine(&board, topStart, topEnd, dir) == FALSE,
+                "Cell outside the board should not count as an open end", results);
+
+    // 盤の下端に接するライン。下側は 10 行目で cells 配列の範囲外にあたる。
+    const char *bottomBoard[] = {
+            NULL,
+            ".........",
+            ".........",
+            ".........",
+            ".........",
+            "........O",
+            "........X",
+            "........X",
+            "........X",
+            "........X"
+        };
+    initBoardWithStr(&board, bottomBoard);
+
+    Cell bottomStart = {.r = 6, .c = 9};
+    Cell bottomEnd = {.r = 9, .c = 9};
+
+    test_assert(isAtLeastHalfOpenLine(&board, bottomStart, bottomEnd, dir) == FALSE,
+                "Cell past the last row should not count as an open end", results);
+
+    test_end("IsHalfOpenLineAtBoardEdge");
+}
+
 void testGetGapIdx(TestResults* results) {
     test_begin("GetGapIdx");
 
@@ -965,6 +1022,7 @@ void runBoardTests() {
     testCountContinuousStonesWithGap(&results);
     testIsOpenLine(&results);
     testIsHalfOpenLine(&results);
+    testIsHalfOpenLineAtBoardEdge(&results);
     testGetGapIdx(&results);
     testIsFour(&results);
     testIsMakingDoubleFour(&results);
