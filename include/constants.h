@@ -71,10 +71,15 @@ typedef struct {
 
 typedef enum
 {
+    MODE_QUIT = 0,
     PLAYER_PLAYER = 1,
     PLAYER_CPU = 2,
     CPU_CPU = 3
 } MODE;
+
+// 入力の終了 (EOF や 'q') を表す Move の番兵。盤上の座標とは決して一致しない
+#define QUIT_MOVE_ROW (-1)
+#define QUIT_MOVE_COL (-1)
 
 typedef struct {
     Board board;

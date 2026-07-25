@@ -5,6 +5,7 @@
 
 
 Move getPlayerInput();
+BOOL isQuitMove(Move move);
 void displayThanksMessage(void);
 void printBoard(Game *game);
 void announceResult(const Game *game);
