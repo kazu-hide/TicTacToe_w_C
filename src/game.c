@@ -53,8 +53,6 @@ Move getPlayerMove(Game *game) {
     while (TRUE)
     {
         Move move = getPlayerInput();
-        printf("row %d, col %d", move.row, move.col);
-
         // 入力の終了は検証せずそのまま呼び出し元へ返す
         if (isQuitMove(move))
             return move;
