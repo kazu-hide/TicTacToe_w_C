@@ -1065,7 +1065,7 @@ void testHasLegalMove(TestResults* results) {
     test_end("HasLegalMove");
 }
 
-void runBoardTests() {
+int runBoardTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("Board Tests");
     
@@ -1089,4 +1089,5 @@ void runBoardTests() {
     restore_output();
     
     test_suite_end("Board Tests", &results);
+    return results.failed;
 }

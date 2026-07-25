@@ -264,7 +264,7 @@ void testFullBoardIsDrawNotLoss(TestResults* results) {
     test_end("FullBoardIsDrawNotLoss");
 }
 
-void runGameTests() {
+int runGameTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("Game Tests");
     
@@ -284,5 +284,6 @@ void runGameTests() {
     restore_output();
 
     test_suite_end("Game Tests", &results);
+    return results.failed;
 }
 

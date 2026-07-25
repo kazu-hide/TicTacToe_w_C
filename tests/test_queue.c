@@ -108,7 +108,7 @@ void testQueueExtend(TestResults* results) {
     test_end("QueueExtend");
 }
 
-void runQueueTests() {
+int runQueueTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("Queue Tests");
     
@@ -121,4 +121,5 @@ void runQueueTests() {
     restore_output();
     
     test_suite_end("Queue Tests", &results);
+    return results.failed;
 }

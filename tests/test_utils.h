@@ -18,8 +18,13 @@ void test_assert(BOOL condition, const char* message, TestResults* results);
 
 void suppress_output(void);
 void restore_output(void);
+void suppress_stderr(void);
+void restore_stderr(void);
+
+// 失敗件数からプロセスの終了コードを決める
+int exitCodeFor(int failedCount);
 
 Board __prepareBoard();
 void initBoardWithStr(Board *board, const char *lines[BOARD_ROWS + 1]);
-void runUtilsTests();
+int runUtilsTests(void);
 #endif

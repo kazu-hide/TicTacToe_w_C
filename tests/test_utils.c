@@ -56,6 +56,35 @@ void restore_output(void) {
     }
 }
 
+static FILE* original_stderr = NULL;
+static FILE* stderr_dev_null = NULL;
+
+// 意図的な失敗を記録するテストで、[FAIL] 表示が混ざらないようにする
+void suppress_stderr(void) {
+    if (!original_stderr) {
+        original_stderr = stderr;
+#ifdef _WIN32
+        stderr_dev_null = fopen("NUL", "w");
+#else
+        stderr_dev_null = fopen("/dev/null", "w");
+#endif
+        stderr = stderr_dev_null;
+    }
+}
+
+void restore_stderr(void) {
+    if (original_stderr) {
+        stderr = original_stderr;
+        fclose(stderr_dev_null);
+        original_stderr = NULL;
+        stderr_dev_null = NULL;
+    }
+}
+
+int exitCodeFor(int failedCount) {
+    return failedCount > 0 ? 1 : 0;
+}
+
 
 void testInitBoardWithStr(TestResults* results) {
     test_begin("InitBoardWithStr");
@@ -103,7 +132,7 @@ void testMax(TestResults* results) {
     test_end("Max");
 }
 
-void runUtilsTests() {
+int runUtilsTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("Utils Tests");
     
@@ -115,4 +144,5 @@ void runUtilsTests() {
     restore_output();
     
     test_suite_end("Utils Tests", &results);
+    return results.failed;
 }

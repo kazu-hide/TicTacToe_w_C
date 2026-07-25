@@ -292,7 +292,7 @@ void testNegaMaxScoresNoLegalMoveAsLoss(TestResults* results) {
     test_end("NegaMaxScoresNoLegalMoveAsLoss");
 }
 
-void runCPUTests() {
+int runCPUTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("CPU Tests");
     
@@ -316,4 +316,5 @@ void runCPUTests() {
     restore_output();
     
     test_suite_end("CPU Tests", &results);
+    return results.failed;
 }
