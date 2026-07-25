@@ -47,6 +47,19 @@ static void printCell(char cell, CellDisplayType displayType) {
         }
 }
 
+// セルの表示種別を決定する
+static CellDisplayType getCellDisplayType(Board *board, const Hand *lastHand,
+                                          int row, int col, char nextPlayer) {
+    if (row == lastHand->move.row && col == lastHand->move.col)
+        return LAST_MOVE;
+
+    if (board->cells[row][col] == EMPTY_CELL &&
+        isProhibitedMove(board, row, col, nextPlayer))
+        return PROHIBITED;
+
+    return NORMAL;
+}
+
 void printBoard(Game *game) {
     Board *board = &game->board;
     Hand lastHand = game->handHistory[game->moveCount - 1];
@@ -60,23 +73,15 @@ void printBoard(Game *game) {
 
     for (int i = 1; i <= BOARD_ROWS; i++) {
         printf("%d\t", i);
-        
-        for (int j = 1; j < BOARD_COLUMNS; j++) {
-            CellDisplayType displayType = NORMAL;
 
-            if (i == lastHand.move.row && j == lastHand.move.col) {
-                displayType = LAST_MOVE;
-            } else if (board->cells[i][j] == EMPTY_CELL && 
-                      isProhibitedMove(board, i, j, nextPlayer)) {
-                displayType = PROHIBITED;
+        for (int j = 1; j <= BOARD_COLUMNS; j++) {
+            printCell(board->cells[i][j], getCellDisplayType(board, &lastHand, i, j, nextPlayer));
+
+            // 最後の列の後には区切り文字を入れない
+            if (j < BOARD_COLUMNS) {
+                printf(" | ");
             }
-            printCell(board->cells[i][j], displayType);
-            printf(" | ");
         }
-        
-        // 最後の列は特別処理（区切り文字なし）
-        printCell(board->cells[i][BOARD_COLUMNS], 
-                 i == lastHand.move.row && BOARD_COLUMNS == lastHand.move.col);
         printf("\n");
 
         // セパレータの表示

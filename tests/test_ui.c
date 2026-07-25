@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "../include/board.h"
 #include "../include/ui.h"
 #include "../include/game.h"
 #include "test_utils.h"
@@ -71,6 +72,66 @@ void testPrintBoard(TestResults* results) {
     remove("test_print_board_output.txt");
     
     test_end("PrintBoard");
+}
+
+// 出力から "<row>\t" で始まる行を取り出す
+static void readBoardRow(const char* path, int row, char* out, size_t size) {
+    char prefix[8];
+    snprintf(prefix, sizeof(prefix), "%d\t", row);
+
+    out[0] = '\0';
+    FILE* fp = fopen(path, "r");
+    if (!fp)
+        return;
+
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), fp) != NULL) {
+        if (strncmp(buffer, prefix, strlen(prefix)) == 0) {
+            snprintf(out, size, "%s", buffer);
+            break;
+        }
+    }
+    fclose(fp);
+}
+
+void testPrintBoardProhibitedMoveInLastColumn(TestResults* results) {
+    test_begin("PrintBoardProhibitedMoveInLastColumn");
+
+    // 9列目の 1,2,3,5,6 行目に X。(4,9) に打つと長連 (6連) になるため禁じ手。
+    Game game = initGame(PLAYER_PLAYER);
+    game.board.cells[1][BOARD_COLUMNS] = PLAYER_X;
+    game.board.cells[2][BOARD_COLUMNS] = PLAYER_X;
+    game.board.cells[3][BOARD_COLUMNS] = PLAYER_X;
+    game.board.cells[5][BOARD_COLUMNS] = PLAYER_X;
+    game.board.cells[6][BOARD_COLUMNS] = PLAYER_X;
+
+    // printBoard() は「次の手番」の禁じ手を表示する
+    game.currentPlayer = PLAYER_O;
+    game.moveCount = 1;
+    game.handHistory[0].move.row = 6;
+    game.handHistory[0].move.col = BOARD_COLUMNS;
+    game.handHistory[0].player = PLAYER_X;
+
+    test_assert(isProhibitedMove(&game.board, 4, BOARD_COLUMNS, PLAYER_X) == TRUE,
+                "Test setup: (4, 9) should be a prohibited move", results);
+
+    const char* path = "test_print_board_last_column.txt";
+    FILE* fp = fopen(path, "w");
+    FILE* stdout_backup = stdout;
+    stdout = fp;
+    printBoard(&game);
+    stdout = stdout_backup;
+    fclose(fp);
+
+    char row4[256];
+    readBoardRow(path, 4, row4, sizeof(row4));
+    remove(path);
+
+    // 4行目の最終列が赤い * で表示されていること
+    test_assert(strstr(row4, "\x1b[31m*\x1b[39m\n") != NULL,
+                "Prohibited move in the last column should be marked", results);
+
+    test_end("PrintBoardProhibitedMoveInLastColumn");
 }
 
 void testGetPlayerInputExpectedStr(TestResults* results) {
@@ -212,6 +273,7 @@ void runUiTests() {
     suppress_output();
 
     testPrintBoard(&results);
+    testPrintBoardProhibitedMoveInLastColumn(&results);
     testGetPlayerInputExpectedStr(&results);
     testGetPlayerInputWithoutComma(&results);
     testGetPlayerInputWithSpace(&results);
