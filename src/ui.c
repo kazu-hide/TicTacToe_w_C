@@ -60,9 +60,19 @@ static CellDisplayType getCellDisplayType(Board *board, const Hand *lastHand,
     return NORMAL;
 }
 
+// 最後に打たれた手を返す。まだ一手も打たれていない場合は盤外の手を返す
+static Hand getLastHand(const Game *game) {
+    Hand noHand = {.move = {.row = 0, .col = 0}, .player = EMPTY_CELL};
+
+    if (game->moveCount <= 0)
+        return noHand;
+
+    return game->handHistory[game->moveCount - 1];
+}
+
 void printBoard(Game *game) {
     Board *board = &game->board;
-    Hand lastHand = game->handHistory[game->moveCount - 1];
+    Hand lastHand = getLastHand(game);
 
     char nextPlayer = (game->currentPlayer == PLAYER_X) ? PLAYER_O : PLAYER_X;
 
@@ -182,7 +192,11 @@ void announceResult(const Game* game) {
     
     switch (game->gameState) {
         case GAME_PLAYING:
-            printf("Player %c placed at: %d, %d\n", game->currentPlayer, game->handHistory[game->moveCount - 1].move.row, game->handHistory[game->moveCount - 1].move.col);
+            if (game->moveCount > 0) {
+                Hand lastHand = getLastHand(game);
+                printf("Player %c placed at: %d, %d\n",
+                       game->currentPlayer, lastHand.move.row, lastHand.move.col);
+            }
             break;
         case GAME_WIN:
             printf("Congratulations! Player %c wins!\n", game->winner);

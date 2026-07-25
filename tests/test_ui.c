@@ -1,11 +1,45 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stddef.h>
 #include "../include/board.h"
 #include "../include/ui.h"
 #include "../include/game.h"
 #include "test_utils.h"
 #include "test_ui.h"
+
+// 与えられた出力関数を実行し、その標準出力を文字列として buffer に取り込む
+static void captureOutput(void (*fn)(Game*), Game* game, char* buffer, size_t size) {
+    const char* path = "test_capture_output.txt";
+
+    FILE* fp = fopen(path, "w");
+    FILE* stdout_backup = stdout;
+    stdout = fp;
+    fn(game);
+    stdout = stdout_backup;
+    fclose(fp);
+
+    buffer[0] = '\0';
+    fp = fopen(path, "r");
+    if (fp) {
+        size_t read = fread(buffer, 1, size - 1, fp);
+        buffer[read] = '\0';
+        fclose(fp);
+    }
+    remove(path);
+}
+
+// handHistory[-1] が重なるバイト列に、盤上のマスに見える Hand を書き込む。
+// printBoard() が moveCount == 0 でも handHistory[moveCount - 1] を読んでいると、
+// このマスが「最後の手」として着色されてしまう。
+static void writeBytesBeforeHandHistory(Game* game, int row, int col) {
+    Hand fake = {.move = {.row = row, .col = col}, .player = PLAYER_X};
+    memcpy((char*)game + offsetof(Game, handHistory) - sizeof(Hand), &fake, sizeof(Hand));
+}
+
+static void announceResultAdapter(Game* game) {
+    announceResult(game);
+}
 
 void testPrintBoard(TestResults* results) {
     test_begin("PrintBoard");
@@ -266,6 +300,40 @@ void testSelectGameModeReturnsQuitOnEof(TestResults* results) {
     test_end("SelectGameModeReturnsQuitOnEof");
 }
 
+void testPrintBoardWithoutAnyMove(TestResults* results) {
+    test_begin("PrintBoardWithoutAnyMove");
+
+    Game game = initGame(PLAYER_PLAYER);
+    writeBytesBeforeHandHistory(&game, 2, 2);
+    game.moveCount = 0;  // まだ一手も打たれていない
+
+    char output[4096];
+    captureOutput(printBoard, &game, output, sizeof(output));
+
+    // 最後の手を表す緑色のエスケープシーケンスが含まれていないこと
+    test_assert(strstr(output, "\x1b[32m") == NULL,
+                "Empty board should not highlight any cell as the last move", results);
+
+    test_end("PrintBoardWithoutAnyMove");
+}
+
+void testAnnounceResultWithoutAnyMove(TestResults* results) {
+    test_begin("AnnounceResultWithoutAnyMove");
+
+    Game game = initGame(PLAYER_PLAYER);
+    writeBytesBeforeHandHistory(&game, 2, 2);
+    game.moveCount = 0;
+    game.gameState = GAME_PLAYING;
+
+    char output[512];
+    captureOutput(announceResultAdapter, &game, output, sizeof(output));
+
+    test_assert(strstr(output, "placed at") == NULL,
+                "Should not report a move when none has been played", results);
+
+    test_end("AnnounceResultWithoutAnyMove");
+}
+
 void runUiTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("UI Tests");
@@ -274,6 +342,8 @@ void runUiTests() {
 
     testPrintBoard(&results);
     testPrintBoardProhibitedMoveInLastColumn(&results);
+    testPrintBoardWithoutAnyMove(&results);
+    testAnnounceResultWithoutAnyMove(&results);
     testGetPlayerInputExpectedStr(&results);
     testGetPlayerInputWithoutComma(&results);
     testGetPlayerInputWithSpace(&results);
