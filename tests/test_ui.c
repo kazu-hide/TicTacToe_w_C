@@ -334,7 +334,7 @@ void testAnnounceResultWithoutAnyMove(TestResults* results) {
     test_end("AnnounceResultWithoutAnyMove");
 }
 
-void runUiTests() {
+int runUiTests(void) {
     TestResults results = {0, 0, 0};
     test_suite_begin("UI Tests");
     
@@ -356,5 +356,6 @@ void runUiTests() {
     restore_output();
     
     test_suite_end("UI Tests", &results);
+    return results.failed;
 }
 
