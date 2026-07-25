@@ -261,6 +261,37 @@ void testIsGameOverRejectsOutOfBoardCell(TestResults* results) {
     test_end("IsGameOverRejectsOutOfBoardCell");
 }
 
+void testNegaMaxScoresNoLegalMoveAsLoss(TestResults* results) {
+    test_begin("NegaMaxScoresNoLegalMoveAsLoss");
+
+    // 空点が (4,9) だけで、そこは黒にとって長連になる禁じ手。
+    // 黒番のこのノードは負けが確定しているので、決定的な負けスコアを返すこと。
+    // (docs/renju-rules.md の確定仕様)
+    Board board;
+    const char *trapped[] = {
+            NULL,
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOO.",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX",
+            "OOOOOOOOX"
+        };
+    initBoardWithStr(&board, trapped);
+
+    int bestRow = -1, bestCol = -1;
+    int score = negaMax(&board, 1, PLAYER_X, 0, 0, &bestRow, &bestCol,
+                        -SCORE_INFINITY, SCORE_INFINITY);
+
+    test_assert(score == -(TERMINAL_WIN_SCORE + 1),
+                "A node with no legal move should score as a loss", results);
+
+    test_end("NegaMaxScoresNoLegalMoveAsLoss");
+}
+
 void runCPUTests() {
     TestResults results = {0, 0, 0};
     test_suite_begin("CPU Tests");
@@ -280,6 +311,7 @@ void runCPUTests() {
     testGetCpuMoveTakesImmediateWin(&results);
     testGetCpuMoveBlocksImmediateLoss(&results);
     testIsGameOverRejectsOutOfBoardCell(&results);
+    testNegaMaxScoresNoLegalMoveAsLoss(&results);
 
     restore_output();
     

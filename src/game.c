@@ -83,9 +83,35 @@ void updateGameState(Game *game, Move move){
     }
 }
 
+// 着手する前に決着しているかを判定する。
+// 判定順序は docs/renju-rules.md を参照 (満局を先に見ることで、
+// 禁じ手を持たない白が「打てない」ケースが引き分けになる)
+static BOOL settleBeforeMove(Game *game) {
+    if (boardIsFull(&game->board)) {
+        game->gameState = GAME_DRAW;
+        return TRUE;
+    }
+
+    if (!hasLegalMove(&game->board, game->currentPlayer)) {
+        // 空点が全て禁じ手。禁点に打たされたものとみなし手番側の負けとする
+        announceNoLegalMove(game->currentPlayer);
+        game->gameState = GAME_WIN;
+        game->winner = (game->currentPlayer == PLAYER_X) ? PLAYER_O : PLAYER_X;
+        return TRUE;
+    }
+
+    return FALSE;
+}
+
 // 1ターンの処理
 void playTurn(Game* game) {
     Move move;
+
+    if (settleBeforeMove(game)) {
+        announceResult(game);
+        return;
+    }
+
     printGameStatus(game->moveCount + 1, game->currentPlayer);
 
     if (
