@@ -24,8 +24,11 @@ void switchPlayer(Game* game) {
     game->currentPlayer = (game->currentPlayer == PLAYER_X) ? PLAYER_O : PLAYER_X;
 }
 
+// row, col は「直前に打たれた手」。盤外の場合は打たれた手が無いとみなす。
 BOOL isGameOver(Board *board, int row, int col, char player) {
-    return isWinMove(board, row, col, player) || boardIsFull(board);
+    if (isInBoard(row, col) && isWinMove(board, row, col, player))
+        return TRUE;
+    return boardIsFull(board);
 }
 
 BOOL isValidMove(Board* board, int row, int col, char playerMark) {

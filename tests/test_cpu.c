@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include "../include/utils.h"
+#include "../include/board.h"
+#include "../include/game.h"
 #include "../include/cpu.h"
 #include "test_utils.h"
 #include "test_cpu.h"
@@ -159,14 +161,104 @@ void testNegaMax(TestResults* results) {
     board.cells[8][9] = PLAYER_O;
 
     int bestRow = -1, bestCol = -1;
-    negaMax(&board, NEGA_MAX_DEPTH, PLAYER_X, &bestRow, &bestCol, -9999999, 9999999);
-    
-    test_assert(bestRow == 2, 
+    negaMax(&board, NEGA_MAX_DEPTH, PLAYER_X, 0, 0, &bestRow, &bestCol,
+            -SCORE_INFINITY, SCORE_INFINITY);
+
+    // (2,2)-(2,5) の四に対し、(2,1) と (2,6) はどちらも即座に五になる等価な手。
+    // 特定の列ではなく「五を作る手を選ぶこと」を検証する。
+    test_assert(bestRow == 2,
                 "NegaMax should choose row 2 for best move", results);
-    test_assert(bestCol == 6, 
-                "NegaMax should choose column 6 for best move", results);
+    test_assert(isWinMove(&board, bestRow, bestCol, PLAYER_X) == TRUE,
+                "NegaMax should choose a winning move", results);
     
     test_end("NegaMax");
+}
+
+void testGetCpuMoveReturnsMoveInBoard(TestResults* results) {
+    test_begin("GetCpuMoveReturnsMoveInBoard");
+
+    // (1,1)-(4,4) に手番側の石が並んでいる局面。
+    // 終端判定が「直前の手」ではなく初期値 (0,0) を見ていると、
+    // isWinMove(board, 0, 0, X) が対角線を数え上げて探索前に打ち切られ、
+    // 手が一度も選ばれないまま (0,0) が返ってしまう。
+    Game game = initGame(CPU_CPU);
+    game.board.cells[1][1] = PLAYER_X;
+    game.board.cells[2][2] = PLAYER_X;
+    game.board.cells[3][3] = PLAYER_X;
+    game.board.cells[4][4] = PLAYER_X;
+    game.board.cells[8][1] = PLAYER_O;
+    game.board.cells[8][2] = PLAYER_O;
+    game.board.cells[9][1] = PLAYER_O;
+    game.board.cells[9][2] = PLAYER_O;
+    game.currentPlayer = PLAYER_X;
+
+    Move move = getCpuMove(&game);
+
+    test_assert(isInBoard(move.row, move.col) == TRUE,
+                "CPU move should be inside the board", results);
+    test_assert(game.board.cells[move.row][move.col] == EMPTY_CELL,
+                "CPU move should be an empty cell", results);
+
+    test_end("GetCpuMoveReturnsMoveInBoard");
+}
+
+void testGetCpuMoveTakesImmediateWin(TestResults* results) {
+    test_begin("GetCpuMoveTakesImmediateWin");
+
+    // O は (5,2)-(5,5) の四。(5,1) または (5,6) に打てば即座に五。
+    Game game = initGame(PLAYER_CPU);
+    game.board.cells[5][2] = PLAYER_O;
+    game.board.cells[5][3] = PLAYER_O;
+    game.board.cells[5][4] = PLAYER_O;
+    game.board.cells[5][5] = PLAYER_O;
+    game.board.cells[1][1] = PLAYER_X;
+    game.board.cells[9][9] = PLAYER_X;
+    game.currentPlayer = PLAYER_O;
+
+    Move move = getCpuMove(&game);
+
+    test_assert(isWinMove(&game.board, move.row, move.col, PLAYER_O) == TRUE,
+                "CPU should play the immediately winning move", results);
+
+    test_end("GetCpuMoveTakesImmediateWin");
+}
+
+void testGetCpuMoveBlocksImmediateLoss(TestResults* results) {
+    test_begin("GetCpuMoveBlocksImmediateLoss");
+
+    // X が (5,2)-(5,5) の四。左端 (5,1) は O が塞いでいるため、
+    // 五を止められる手は (5,6) の一択。
+    Game game = initGame(PLAYER_CPU);
+    game.board.cells[5][2] = PLAYER_X;
+    game.board.cells[5][3] = PLAYER_X;
+    game.board.cells[5][4] = PLAYER_X;
+    game.board.cells[5][5] = PLAYER_X;
+    game.board.cells[5][1] = PLAYER_O;
+    game.board.cells[9][9] = PLAYER_O;
+    game.currentPlayer = PLAYER_O;
+
+    Move move = getCpuMove(&game);
+
+    test_assert((move.row == 5 && move.col == 6) == TRUE,
+                "CPU should block the opponent's four", results);
+
+    test_end("GetCpuMoveBlocksImmediateLoss");
+}
+
+void testIsGameOverRejectsOutOfBoardCell(TestResults* results) {
+    test_begin("IsGameOverRejectsOutOfBoardCell");
+
+    // (0,0) は盤外。盤上の対角線を数えて「勝ち」と判定してはいけない。
+    Board board = __prepareBoard();
+    board.cells[1][1] = PLAYER_X;
+    board.cells[2][2] = PLAYER_X;
+    board.cells[3][3] = PLAYER_X;
+    board.cells[4][4] = PLAYER_X;
+
+    test_assert(isGameOver(&board, 0, 0, PLAYER_X) == FALSE,
+                "Out of board cell should never end the game", results);
+
+    test_end("IsGameOverRejectsOutOfBoardCell");
 }
 
 void runCPUTests() {
@@ -184,7 +276,11 @@ void runCPUTests() {
     testEvaluateDoubleClosedLine(&results);
     testEvaluateMultiLine(&results);
     testNegaMax(&results);
-    
+    testGetCpuMoveReturnsMoveInBoard(&results);
+    testGetCpuMoveTakesImmediateWin(&results);
+    testGetCpuMoveBlocksImmediateLoss(&results);
+    testIsGameOverRejectsOutOfBoardCell(&results);
+
     restore_output();
     
     test_suite_end("CPU Tests", &results);

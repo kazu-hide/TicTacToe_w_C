@@ -6,33 +6,47 @@
 #include "cpu.h"
 
 int evaluate(Board *board, char playerMark);
-int negaMax(Board *board, int depth, char playerMark, int *bestRow, int *bestCol, int alpha, int beta);
+int negaMax(Board *board, int depth, char playerMark, int lastRow, int lastCol, int *bestRow, int *bestCol, int alpha, int beta);
 
+// 合法手が1つも評価されていないことを表す番兵。
+// evaluate() が返しうるどのスコアよりも小さい。
+#define NO_LEGAL_MOVE_SCORE (-SCORE_INFINITY - 1)
 
 Move getCpuMove(Game *game) {
     Move move = {0, 0};
 
-    negaMax(&game->board, NEGA_MAX_DEPTH, game->currentPlayer, &move.row, &move.col, -9999999, 9999999);
+    // 探索開始時点では「直前の手」が無いため、盤外の座標を渡して終端判定を無効にする
+    negaMax(&game->board, NEGA_MAX_DEPTH, game->currentPlayer, 0, 0,
+            &move.row, &move.col, -SCORE_INFINITY, SCORE_INFINITY);
     return move;
 }
 
-int negaMax(Board *board, int depth, char playerMark, int* bestRow, int* bestCol, int alpha, int beta) {
-    if (depth == 0 || isGameOver(board, *bestRow, *bestCol, playerMark)) {
-        return evaluate(board, playerMark);
-    }
+// lastRow, lastCol は直前に打たれた手。打たれた手が無い場合は盤外の座標を渡す。
+int negaMax(Board *board, int depth, char playerMark, int lastRow, int lastCol, int* bestRow, int* bestCol, int alpha, int beta) {
+    char opponentMark = (playerMark == PLAYER_X) ? PLAYER_O : PLAYER_X;
 
-    int maxScore = -9999999;
+    // 直前の手を打ったのは相手。相手が五を作っていれば手番側の負けが確定している。
+    // 残り深さを足すことで、より早い決着を高く評価する（勝ちは早く、負けは遅く）。
+    if (isInBoard(lastRow, lastCol) && isWinMove(board, lastRow, lastCol, opponentMark))
+        return -(TERMINAL_WIN_SCORE + depth);
+
+    if (boardIsFull(board))
+        return 0;  // 引き分け
+
+    if (depth == 0)
+        return evaluate(board, playerMark);
+
+    int maxScore = NO_LEGAL_MOVE_SCORE;
     for (int r = 1; r <= BOARD_ROWS; r++) {
         for (int c = 1; c <= BOARD_COLUMNS; c++) {
             if (board->cells[r][c] == EMPTY_CELL) {
                 // 禁じ手チェック
                 if (playerMark == PLAYER_X && isProhibitedMove(board, r, c, playerMark))
-                    continue;  
+                    continue;
 
                 board->cells[r][c] = playerMark;
 
-                char nextPlayerMark = (playerMark == PLAYER_X) ? PLAYER_O : PLAYER_X;
-                int score = -negaMax(board, depth - 1, nextPlayerMark, bestRow, bestCol, -beta, -alpha);
+                int score = -negaMax(board, depth - 1, opponentMark, r, c, bestRow, bestCol, -beta, -alpha);
                 if (score > maxScore) {
                     maxScore = score;
                     if (depth == NEGA_MAX_DEPTH) {
@@ -45,7 +59,7 @@ int negaMax(Board *board, int depth, char playerMark, int* bestRow, int* bestCol
 
 
                 alpha = max(alpha, maxScore);
-                
+
                 // 枝刈りの条件: この時点でbeta以上のスコアが出ていれば、
                 // 親ノードはこの手を選択しないことが確定する
                 if (alpha >= beta)
@@ -53,6 +67,11 @@ int negaMax(Board *board, int depth, char playerMark, int* bestRow, int* bestCol
             }
         }
     }
+
+    // 合法手が1つも無い場合は番兵を返さず、現局面の評価値を返す
+    if (maxScore == NO_LEGAL_MOVE_SCORE)
+        return evaluate(board, playerMark);
+
     return maxScore;
 }
 
