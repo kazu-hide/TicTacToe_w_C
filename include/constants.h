@@ -14,6 +14,12 @@
 
 #define NEGA_MAX_DEPTH 3
 
+// negaMax の alpha / beta の初期値。評価値が取りうる範囲より十分大きい値
+#define SCORE_INFINITY 9999999
+
+// 決着した局面のスコア。ヒューリスティックな評価値の合計より必ず大きい
+#define TERMINAL_WIN_SCORE 1000000
+
 // ライン長さスコア
 #define WIN_POINTS 99999
 #define OPEN_FOUR_POINTS 5000
