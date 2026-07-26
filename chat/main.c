@@ -42,14 +42,26 @@ int main(int argc, char **argv) {
     int fd = net_connect(&cfg);
     if (fd < 0) return 1;
 
-    const char *msg = cfg.mode == NET_CONNECT ? "hello from join\n" : "hello from host\n";
+    //const char *msg = cfg.mode == NET_CONNECT ? "hello from join\n" : "hello from host\n";
+
+    /**
+     * 実験2
+     * "hello\nworld\n"を1回でsendしたら何回 recvを受け取るか
+     */
+    const char *msg = "hello\nworld\n";
 
     if (cfg.mode == NET_CONNECT) {
+        /*
+         * 実験1にて 1 byte ごとに送るためのコード
+         *
         for (size_t i = 0; i < strlen(msg); ++i) {
             if(send(fd, msg + i, 1, 0) < 0)
                 perror("send");
             usleep(100000);
         }
+         */
+        if(send(fd, msg, strlen(msg), 0) < 0)
+            perror("send");
     }
 
     if (cfg.mode == NET_LISTEN) {
