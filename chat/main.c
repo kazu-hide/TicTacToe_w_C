@@ -5,18 +5,87 @@
 #include "net.h"
 
 /* ------------------------------------------------------------------
- * Session 2 の実験用スイッチ。両方 0 に戻すと Session 1 の挙動になる。
+ * Session 2 の実験用スイッチ。両方 0 にすると Session 1 の挙動に戻る。
  *
- *   実験1: SLOW_SEND=1, TWO_LINES=0   1バイトずつ 100ms 間隔で送る
- *   実験2: SLOW_SEND=0, TWO_LINES=1   "hello\nworld\n" を1回の send で送る
+ *   実験1: SLOW_SEND=1  "hello\nworld\n" を1バイトずつ 100ms 間隔で送る
+ *          → 1つのメッセージが複数回の recv に分割されることを見る
+ *   実験2: TWO_LINES=1  "hello\nworld\n" を1回の send で送る
+ *          → 2つのメッセージが1回の recv にまとまることを見る
  *
- * 実験中は送信役(--join)と受信役(--host)を非対称にしている。
- * 両側が recv でループすると互いに待ち合ってデッドロックするため。
+ * 実験中は送信役(--join)と受信役(--host)を非対称にする。理由は2つ。
+ *   - 両側が recv でループすると互いに待ち合ってデッドロックする
+ *   - 受信役が送ると、相手が読まないまま切断して RST が飛ぶ
+ *     (Connection reset by peer になり観測が汚れる)
  * ------------------------------------------------------------------ */
-#define EXPERIMENT_SLOW_SEND 1
+#define EXPERIMENT_SLOW_SEND 0
 #define EXPERIMENT_TWO_LINES 0
 
 #define EXPERIMENT (EXPERIMENT_SLOW_SEND || EXPERIMENT_TWO_LINES)
+
+/* 1回で送る */
+static void send_at_once(int fd, const char *msg)
+{
+    if (send(fd, msg, strlen(msg), 0) < 0)
+        perror("send");
+}
+
+/* 1バイトずつ間隔を空けて送る (実験1)。
+ * 間隔を空けないと OS がまとめてしまい、分割が観測できない */
+static void send_slowly(int fd, const char *msg)
+{
+    size_t len = strlen(msg);
+
+    for (size_t i = 0; i < len; ++i) {
+        if (send(fd, msg + i, 1, 0) < 0) {
+            perror("send");
+            return;
+        }
+        usleep(100000);
+    }
+}
+
+/* 相手が切断するまで recv を繰り返し、1回ごとにバイト数と中身を記録する。
+ * recv は NUL 終端しないので %.*s で長さを指定して表示する */
+static void recv_loop(int fd)
+{
+    char buf[64];
+    int calls = 0;
+
+    for (;;) {
+        ssize_t n = recv(fd, buf, sizeof buf, 0);
+        calls++;
+
+        if (n < 0) {
+            perror("recv");
+            break;
+        }
+        if (n == 0) {
+            fprintf(stderr, "[recv] #%d: peer closed\n", calls);
+            break;
+        }
+        fprintf(stderr, "[recv] #%d: %zd bytes: %.*s\n", calls, n, (int)n, buf);
+    }
+
+    fprintf(stderr, "=== recv を呼んだ回数: %d ===\n", calls);
+}
+
+/* Session 1 の挙動: 挨拶を送り、相手の挨拶を1回受け取る */
+static void exchange_greeting(int fd, const net_config_t *cfg)
+{
+    const char *msg = (cfg->mode == NET_CONNECT) ? "hello from join\n"
+                                                 : "hello from host\n";
+    send_at_once(fd, msg);
+
+    char buf[64];
+    ssize_t n = recv(fd, buf, sizeof buf, 0);
+
+    if (n < 0)
+        perror("recv");
+    else if (n == 0)
+        fprintf(stderr, "peer closed\n");
+    else
+        printf("%.*s", (int)n, buf);  /* 相手の挨拶は既に \n で終わっている */
+}
 
 int main(int argc, char **argv) {
     net_config_t cfg = {0};
@@ -42,43 +111,21 @@ int main(int argc, char **argv) {
     int fd = net_connect(&cfg);
     if (fd < 0) return 1;
 
-    //const char *msg = cfg.mode == NET_CONNECT ? "hello from join\n" : "hello from host\n";
+    if (EXPERIMENT) {
+        /* 実験モード: --join が送るだけ、--host が受けるだけ */
+        if (cfg.mode == NET_CONNECT) {
+            const char *msg = "hello\nworld\n";
 
-    /**
-     * 実験2
-     * "hello\nworld\n"を1回でsendしたら何回 recvを受け取るか
-     */
-    const char *msg = "hello\nworld\n";
-
-    if (cfg.mode == NET_CONNECT) {
-        /*
-         * 実験1にて 1 byte ごとに送るためのコード
-         *
-        for (size_t i = 0; i < strlen(msg); ++i) {
-            if(send(fd, msg + i, 1, 0) < 0)
-                perror("send");
-            usleep(100000);
+            if (EXPERIMENT_SLOW_SEND)
+                send_slowly(fd, msg);
+            else
+                send_at_once(fd, msg);
+        } else {
+            recv_loop(fd);
         }
-         */
-        if(send(fd, msg, strlen(msg), 0) < 0)
-            perror("send");
-    }
-
-    if (cfg.mode == NET_LISTEN) {
-        while (1) {
-            char buf[64];
-            ssize_t n = recv(fd, buf, sizeof(buf) - 1, 0);
-            if (n < 0)
-                perror("recv");
-            if (n == 0) {
-                fprintf(stderr, "peer closed\n");
-                break;
-            }
-            if (n > 0) {
-                buf[n] = '\0'; /* recvは終端文字がないため追加 */
-                fprintf(stderr, "[recv] %zd bytes: %.*s\n", n, (int)n, buf);
-            }
-        }
+    } else {
+        /* 通常モード: 両側が挨拶を送り合う */
+        exchange_greeting(fd, &cfg);
     }
 
     close(fd);

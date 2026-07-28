@@ -1,8 +1,6 @@
 /*
  * net.c — Session 1 の実装対象。
  *
- * ここは自分で書く。以下は手順のチェックリストだけを置いてある。
- * 分からなくなったら docs/CHAT_MINI_PROJECT.md の Session 1 を見る。
  */
 #include <stdio.h>
 #include <string.h>
