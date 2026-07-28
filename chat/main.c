@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include "net.h"
+#include "linebuf.h"
 
 /* ------------------------------------------------------------------
  * Session 2 の実験用スイッチ。両方 0 にすると Session 1 の挙動に戻る。
@@ -17,7 +18,7 @@
  *   - 受信役が送ると、相手が読まないまま切断して RST が飛ぶ
  *     (Connection reset by peer になり観測が汚れる)
  * ------------------------------------------------------------------ */
-#define EXPERIMENT_SLOW_SEND 0
+#define EXPERIMENT_SLOW_SEND 1
 #define EXPERIMENT_TWO_LINES 0
 
 #define EXPERIMENT (EXPERIMENT_SLOW_SEND || EXPERIMENT_TWO_LINES)
@@ -44,8 +45,10 @@ static void send_slowly(int fd, const char *msg)
     }
 }
 
-/* 相手が切断するまで recv を繰り返し、1回ごとにバイト数と中身を記録する。
- * recv は NUL 終端しないので %.*s で長さを指定して表示する */
+/**
+ * 相手が切断するまで recv を繰り返し、1回ごとにバイト数と中身を記録する。
+ * recv は NUL 終端しないので %.*s で長さを指定して表示する
+ */
 static void recv_loop(int fd)
 {
     char buf[64];
@@ -67,6 +70,33 @@ static void recv_loop(int fd)
     }
 
     fprintf(stderr, "=== recv を呼んだ回数: %d ===\n", calls);
+}
+
+static void on_line(const char *line, void *ctx)
+{
+    (void)ctx;
+    fprintf(stderr, "[line] %s\n", line);
+}
+
+/**
+ * 相手が切断するまで linebuf_feed を繰り返し、区切り文字ごとに callback(on_line) を呼び出す
+ */
+static void recv_lines(int fd)
+{
+    linebuf_t lb = {0};
+
+    for (;;) {
+        int rc = linebuf_feed(&lb, fd, on_line, NULL);
+        if (rc < 0) {
+            perror("linebuf_feed");
+            break;
+        }
+        if (rc == 0) {
+            fprintf(stderr, "peer closed\n");
+            break;
+        }
+        /* rc == 1 なら継続 */
+    }
 }
 
 /* Session 1 の挙動: 挨拶を送り、相手の挨拶を1回受け取る */
@@ -121,7 +151,7 @@ int main(int argc, char **argv) {
             else
                 send_at_once(fd, msg);
         } else {
-            recv_loop(fd);
+            recv_lines(fd);
         }
     } else {
         /* 通常モード: 両側が挨拶を送り合う */
