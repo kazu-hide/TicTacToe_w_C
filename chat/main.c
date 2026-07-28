@@ -45,33 +45,6 @@ static void send_slowly(int fd, const char *msg)
     }
 }
 
-/**
- * 相手が切断するまで recv を繰り返し、1回ごとにバイト数と中身を記録する。
- * recv は NUL 終端しないので %.*s で長さを指定して表示する
- */
-static void recv_loop(int fd)
-{
-    char buf[64];
-    int calls = 0;
-
-    for (;;) {
-        ssize_t n = recv(fd, buf, sizeof buf, 0);
-        calls++;
-
-        if (n < 0) {
-            perror("recv");
-            break;
-        }
-        if (n == 0) {
-            fprintf(stderr, "[recv] #%d: peer closed\n", calls);
-            break;
-        }
-        fprintf(stderr, "[recv] #%d: %zd bytes: %.*s\n", calls, n, (int)n, buf);
-    }
-
-    fprintf(stderr, "=== recv を呼んだ回数: %d ===\n", calls);
-}
-
 static void on_line(const char *line, void *ctx)
 {
     (void)ctx;
