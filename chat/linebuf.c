@@ -39,5 +39,17 @@ int linebuf_feed(linebuf_t *lb, int fd, line_cb_t cb, void *ctx)
     }
 
     lb->len += n;
+
+    /*
+     * memchr で \n を探す
+     * memchr(buf, '\n', len)
+     * 探索開始位置、探索char, 探索範囲
+     */
+    char *p = memchr(lb->buf, '\n', lb->len);
+    if (p != NULL) {
+        *p = '\0';
+        cb(lb->buf, ctx);
+        lb->len = 0;
+    }
     return 1;
 }

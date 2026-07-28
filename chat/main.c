@@ -18,8 +18,8 @@
  *   - 受信役が送ると、相手が読まないまま切断して RST が飛ぶ
  *     (Connection reset by peer になり観測が汚れる)
  * ------------------------------------------------------------------ */
-#define EXPERIMENT_SLOW_SEND 1
-#define EXPERIMENT_TWO_LINES 0
+#define EXPERIMENT_SLOW_SEND 0
+#define EXPERIMENT_TWO_LINES 1
 
 #define EXPERIMENT (EXPERIMENT_SLOW_SEND || EXPERIMENT_TWO_LINES)
 
