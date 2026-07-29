@@ -2,6 +2,8 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <poll.h>
+#include <errno.h>
 #include "net.h"
 #include "linebuf.h"
 
@@ -96,23 +98,48 @@ static void chat_loop_naive(int fd)
 {
     linebuf_t lb = {0};
     char line[MAX_LEN];
+    struct pollfd pfds[2] = {
+        { .fd = STDIN_FILENO, .events = POLLIN }, // stdin
+        { .fd = fd,      .events = POLLIN }       // network socket
+    };
     
+    int n;
     for (;;) {
-        if (fgets(line, sizeof line, stdin) == NULL) {
-            break;
+       if((n=poll(pfds, 2, 1000)) < 0){
+            if (errno == EINTR) {
+                continue;
+            } else {
+                perror("poll");
+                break;        
+            }
+            if (n == 0) {
+                continue;
+            }
         }
-        send_at_once(fd, line);
 
-        int rc = linebuf_feed(&lb, fd, on_line, NULL);
-        if (rc < 0) {
-            perror("linebuf_feed");
-            break;
+        /**
+        * ソケットが先、標準入力が後
+        *  POLLHUPが理由
+        */
+        if (pfds[1].revents & POLLIN) {
+            int rc = linebuf_feed(&lb, fd, on_line, NULL);
+            if (rc < 0) {
+                perror("linebuf_feed");
+                break;
+            }
+            if (rc == 0) {
+                fprintf(stderr, "peer closed\n");
+                break;
+            }
+            /* rc == 1 なら継続 */
         }
-        if (rc == 0) {
-            fprintf(stderr, "peer closed\n");
-            break;
-        }
-        /* rc == 1 なら継続 */
+
+        if (pfds[0].revents & POLLIN) {
+            if (fgets(line, sizeof line, stdin) == NULL) {
+                break;
+            }
+            send_at_once(fd, line);
+       }
     }
 }
 
