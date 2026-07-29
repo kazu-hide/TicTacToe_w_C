@@ -19,7 +19,7 @@
  *     (Connection reset by peer になり観測が汚れる)
  * ------------------------------------------------------------------ */
 #define EXPERIMENT_SLOW_SEND 0
-#define EXPERIMENT_TWO_LINES 1
+#define EXPERIMENT_TWO_LINES 0
 
 #define EXPERIMENT (EXPERIMENT_SLOW_SEND || EXPERIMENT_TWO_LINES)
 
@@ -72,7 +72,7 @@ static void recv_lines(int fd)
     }
 }
 
-/* Session 1 の挙動: 挨拶を送り、相手の挨拶を1回受け取る */
+/* 挨拶を送り、相手の挨拶を1回受け取る */
 static void exchange_greeting(int fd, const net_config_t *cfg)
 {
     const char *msg = (cfg->mode == NET_CONNECT) ? "hello from join\n"
@@ -88,6 +88,32 @@ static void exchange_greeting(int fd, const net_config_t *cfg)
         fprintf(stderr, "peer closed\n");
     else
         printf("%.*s", (int)n, buf);  /* 相手の挨拶は既に \n で終わっている */
+}
+
+#define  MAX_LEN  100
+
+static void chat_loop_naive(int fd)
+{
+    linebuf_t lb = {0};
+    char line[MAX_LEN];
+    
+    for (;;) {
+        if (fgets(line, sizeof line, stdin) == NULL) {
+            break;
+        }
+        send_at_once(fd, line);
+
+        int rc = linebuf_feed(&lb, fd, on_line, NULL);
+        if (rc < 0) {
+            perror("linebuf_feed");
+            break;
+        }
+        if (rc == 0) {
+            fprintf(stderr, "peer closed\n");
+            break;
+        }
+        /* rc == 1 なら継続 */
+    }
 }
 
 int main(int argc, char **argv) {
@@ -128,7 +154,7 @@ int main(int argc, char **argv) {
         }
     } else {
         /* 通常モード: 両側が挨拶を送り合う */
-        exchange_greeting(fd, &cfg);
+        chat_loop_naive(fd);
     }
 
     close(fd);
