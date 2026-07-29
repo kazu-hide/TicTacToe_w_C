@@ -1,13 +1,13 @@
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
+#include <unistd.h>
 
 #include "linebuf.h"
 
 /**
  * linebuf_feed
  *
- * 1. recv(fd, buf + len, 残り容量)
+ * 1. read(fd, buf + len, 残り容量)
  *  戻り値 > 0 → len += n、続行
  *  戻り値 = 0 → return 0（相手が切断）
  *  戻り値 < 0 → return -1（エラー）
@@ -31,12 +31,13 @@ int linebuf_feed(linebuf_t *lb, int fd, line_cb_t cb, void *ctx)
 
     /**
      * recv(fd, 受信したデータを格納するメモリ領域（バッファ）へのポインタ, バッファの残りサイズ)
+     * read: ソケット以外も対象にできる
      *
      */
-    ssize_t n = recv(fd, lb->buf + lb->len, sizeof lb->buf - lb->len, 0);
+    ssize_t n = read(fd, lb->buf + lb->len, sizeof lb->buf - lb->len);
 
     if (n < 0) {
-        perror("recv");
+        perror("read");
         return -1;
     }
     if (n == 0) {
