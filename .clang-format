@@ -1,0 +1,41 @@
+---
+Language: Cpp
+BasedOnStyle: LLVM
+
+# --- インデント ---------------------------------------------------------
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ContinuationIndentWidth: 4
+ColumnLimit: 100
+
+# --- 波括弧 -------------------------------------------------------------
+# src/ の既存スタイルに合わせて同じ行に置く (同一行 144 箇所 / 次行 11 箇所)
+BreakBeforeBraces: Attach
+
+# --- ポインタ -----------------------------------------------------------
+# const char *msg のように名前側に寄せる
+PointerAlignment: Right
+DerivePointerAlignment: false
+
+# --- 1行に潰さない ------------------------------------------------------
+# if (x) return; を勝手に畳まれるとブレークポイントが置けない
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AllowShortBlocksOnASingleLine: Never
+AllowShortCaseLabelsOnASingleLine: false
+
+# --- その他 -------------------------------------------------------------
+IndentCaseLabels: true
+SpaceAfterCStyleCast: true
+AlignAfterOpenBracket: Align
+AlignConsecutiveMacros: Consecutive
+AlignTrailingComments: true
+KeepEmptyLinesAtTheStartOfBlocks: false
+MaxEmptyLinesToKeep: 1
+
+# --- ヘッダを並べ替えない -----------------------------------------------
+# C では #include の順序に意味があることがある (機能テストマクロ、
+# 先行するヘッダに依存するヘッダなど)。並べ替えでビルドが壊れうるので無効。
+SortIncludes: false
