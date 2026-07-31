@@ -8,7 +8,6 @@
 #include "net.h"
 #include "linebuf.h"
 
-/* 1回で送る */
 static int send_all(int fd, const char *msg)
 {
     size_t len = strlen(msg);
@@ -36,16 +35,28 @@ static void on_recv(const char *line, void *ctx)
     fprintf(stderr, "[recv] %s\n", line);
 }
 
+typedef struct {
+    int fd;
+    int send_failed;
+} send_ctx_t;
+
 static void on_send(const char *line, void *ctx)
 {
-    int sock = *(int *)ctx;
+    send_ctx_t *c = ctx;
+
+    if (c->send_failed) {
+        return;
+    }
 
     /* 1024 + '\n' + '\0' (送る際には 改行+終端 を追加) */
     char out[1026];
     snprintf(out, sizeof out, "%s\n", line);
 
+    if (send_all(c->fd, out) < 0) {
+        c->send_failed = 1;
+        return;
+    }
     fprintf(stderr, "[sent] %s\n", line);
-    send_all(sock, out);
 }
 
 /**
@@ -53,22 +64,31 @@ static void on_send(const char *line, void *ctx)
 *  [相手]              ──→ カーネル ──read──→ sock_lb  ──cb──→ 画面
 * 
 */
-static void chat_loop(int fd)
+static int chat_loop(int fd)
 {
+    int status = 0;
+
     linebuf_t sock_lb = {0};
     linebuf_t stdin_lb = {0};
+
+    send_ctx_t sctx = {
+        .fd = fd,
+        .send_failed = 0
+    };
     
     struct pollfd pfds[2] = {
         { .fd = STDIN_FILENO, .events = POLLIN }, // stdin
         { .fd = fd,      .events = POLLIN }       // network socket
-    };
-    
+    };    
+
     int n;
+
     for (;;) {
        if((n=poll(pfds, 2, 1000)) < 0){
             if (errno == EINTR) {
                 continue;
             } else {
+                status = 1;
                 perror("poll");
                 break;        
             }
@@ -92,6 +112,7 @@ static void chat_loop(int fd)
         if (pfds[1].revents & (POLLIN | POLLHUP)) {
             int rc = linebuf_feed(&sock_lb, fd, on_recv, NULL);
             if (rc < 0) {
+                status = 1;
                 fprintf(stderr, "linebuf_feed failed\n");
                 break;
             }
@@ -101,13 +122,17 @@ static void chat_loop(int fd)
             }
             /* rc == 1 なら継続 */
         }
-        if (pfds[1].revents & (POLLERR | POLLNVAL)) break;
+        if (pfds[1].revents & (POLLERR | POLLNVAL)) {
+            status = 1;
+            break;
+        }
 
 
         /* 標準入力のデータは送信する */
         if (pfds[0].revents & (POLLIN | POLLHUP)) {
-            int rc = linebuf_feed(&stdin_lb, STDIN_FILENO, on_send, &fd);
+            int rc = linebuf_feed(&stdin_lb, STDIN_FILENO, on_send, &sctx);
             if (rc < 0) {
+                status = 1;
                 fprintf(stderr, "linebuf_feed failed\n");
                 break;
             }
@@ -115,10 +140,19 @@ static void chat_loop(int fd)
                 fprintf(stderr, "stdin closed\n");
                 break;
             }
+            if (sctx.send_failed) {
+                status = 1;
+                fprintf(stderr, "send failed\n");
+                break;
+            }
             /* rc == 1 なら継続 */
         }
-        if (pfds[0].revents & (POLLERR | POLLNVAL)) break;
+        if (pfds[0].revents & (POLLERR | POLLNVAL)) {
+            status = 1;
+            break;
+        }
     }
+    return status;
 }
 
 int main(int argc, char **argv) {
@@ -148,8 +182,8 @@ int main(int argc, char **argv) {
     if (fd < 0) return 1;
 
     /* 通常モード: 両側が挨拶を送り合う */
-    chat_loop(fd);
-
+    int status = chat_loop(fd);
     close(fd);
-    return 0;
+    
+    return status;
 }
