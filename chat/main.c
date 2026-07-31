@@ -9,10 +9,24 @@
 #include "linebuf.h"
 
 /* 1回で送る */
-static void send_at_once(int fd, const char *msg)
+static int send_all(int fd, const char *msg)
 {
-    if (send(fd, msg, strlen(msg), 0) < 0)
-        perror("send");
+    size_t len = strlen(msg);
+    size_t sent = 0;
+    ssize_t n = 0;
+
+    while (sent < len) {
+        n = send(fd, msg + sent, len - sent, 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
+        }
+        if (n < 0) {
+            perror("send");
+            return -1;
+        }
+        sent += n;
+    }
+    return 0;
 }
 
 
@@ -30,10 +44,8 @@ static void on_send(const char *line, void *ctx)
     char out[1026];
     snprintf(out, sizeof out, "%s\n", line);
 
-    /* 送ろうとした行を記録する。send_at_once は成否を返さないので
-     * 「送信を試みた」までしか言えない (部分送信は検出できない) */
     fprintf(stderr, "[sent] %s\n", line);
-    send_at_once(sock, out);
+    send_all(sock, out);
 }
 
 /**
@@ -111,7 +123,7 @@ static void chat_loop(int fd)
 
 int main(int argc, char **argv) {
     signal(SIGPIPE, SIG_IGN);
-    
+
     net_config_t cfg = {0};
 
     if (argc == 3 && strcmp(argv[1], "--host") == 0) {
