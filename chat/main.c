@@ -4,9 +4,9 @@
 #include <sys/socket.h>
 #include <poll.h>
 #include <errno.h>
+#include <signal.h> 
 #include "net.h"
 #include "linebuf.h"
-
 
 /* 1回で送る */
 static void send_at_once(int fd, const char *msg)
@@ -110,6 +110,8 @@ static void chat_loop(int fd)
 }
 
 int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
+    
     net_config_t cfg = {0};
 
     if (argc == 3 && strcmp(argv[1], "--host") == 0) {
