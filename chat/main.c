@@ -27,8 +27,12 @@ static void on_send(const char *line, void *ctx)
     int sock = *(int *)ctx;
 
     /* 1024 + '\n' + '\0' (送る際には 改行+終端 を追加) */
-    char out[1026];              
+    char out[1026];
     snprintf(out, sizeof out, "%s\n", line);
+
+    /* 送ろうとした行を記録する。send_at_once は成否を返さないので
+     * 「送信を試みた」までしか言えない (部分送信は検出できない) */
+    fprintf(stderr, "[sent] %s\n", line);
     send_at_once(sock, out);
 }
 
@@ -62,11 +66,18 @@ static void chat_loop(int fd)
         }
 
         /**
-        * ソケットが先、標準入力が後
-        *  POLLHUPが理由
+        * ソケットが先、標準入力が後。POLLHUP が理由。
+        *
+        * POLLHUP は「もう新しくは来ない」であって「もう無い」ではないので、
+        * POLLIN と同じ扱いにして read を試みる。既に届いている分を読み切る
+        * まで抜けてはいけない。読み切ったかどうかは read が 0 を返したか
+        * (linebuf_feed の rc == 0) だけが教えてくれる。
+        *
+        * POLLERR / POLLNVAL は別扱い。POLLNVAL は fd 自体が無効で POLLIN が
+        * 立たないため、処理しないと poll が即座に返り続けて暴走する。
         */
         /* ソケットのデータは受信する */
-        if (pfds[1].revents & POLLIN) {
+        if (pfds[1].revents & (POLLIN | POLLHUP)) {
             int rc = linebuf_feed(&sock_lb, fd, on_recv, NULL);
             if (rc < 0) {
                 fprintf(stderr, "linebuf_feed failed\n");
@@ -78,11 +89,11 @@ static void chat_loop(int fd)
             }
             /* rc == 1 なら継続 */
         }
-        if (pfds[1].revents & (POLLHUP | POLLERR | POLLNVAL)) break;
+        if (pfds[1].revents & (POLLERR | POLLNVAL)) break;
 
 
         /* 標準入力のデータは送信する */
-        if (pfds[0].revents & POLLIN) {
+        if (pfds[0].revents & (POLLIN | POLLHUP)) {
             int rc = linebuf_feed(&stdin_lb, STDIN_FILENO, on_send, &fd);
             if (rc < 0) {
                 fprintf(stderr, "linebuf_feed failed\n");
@@ -94,7 +105,7 @@ static void chat_loop(int fd)
             }
             /* rc == 1 なら継続 */
         }
-        if (pfds[0].revents & (POLLHUP | POLLERR | POLLNVAL)) break;
+        if (pfds[0].revents & (POLLERR | POLLNVAL)) break;
     }
 }
 

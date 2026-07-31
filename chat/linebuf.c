@@ -35,6 +35,7 @@ int linebuf_feed(linebuf_t *lb, int fd, line_cb_t cb, void *ctx)
      *
      */
     ssize_t n = read(fd, lb->buf + lb->len, sizeof lb->buf - lb->len);
+    fprintf(stderr, "[read] %zd bytes\n", n);
 
     if (n < 0) {
         perror("read");
