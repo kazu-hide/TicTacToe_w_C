@@ -106,8 +106,9 @@ python3 "$TMP/deadpeer-$PORT.py" 2>/dev/null &
 sleep 1
 lines 500 | ./chat --join 127.0.0.1:$PORT > "$TMP/j3" 2>&1
 code=$?
-# errno は EPIPE (Broken pipe) にも ECONNRESET (Connection reset by peer) にも
-# なりうる。RST が何回目の send に間に合うかで変わるので、種類は問わず件数を見る。
+# errno を決め打ちしない。RST 到着後、send は EPIPE (Broken pipe) を返し、
+# recv は ECONNRESET (Connection reset by peer) を返す (操作によって違う)。
+# プラットフォーム差もあるので、種類は問わず件数だけを見る。
 check "exit"            1 "$code"
 check "send エラー件数"  1 "$(grep -c '^send: ' "$TMP/j3")"
 check "send failed 件数" 1 "$(grep -c 'send failed' "$TMP/j3")"
