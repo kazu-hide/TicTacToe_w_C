@@ -2,92 +2,162 @@
 #include <string.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <poll.h>
+#include <errno.h>
+#include <signal.h> 
 #include "net.h"
+#include "linebuf.h"
 
-/* ------------------------------------------------------------------
- * Session 2 の実験用スイッチ。両方 0 にすると Session 1 の挙動に戻る。
- *
- *   実験1: SLOW_SEND=1  "hello\nworld\n" を1バイトずつ 100ms 間隔で送る
- *          → 1つのメッセージが複数回の recv に分割されることを見る
- *   実験2: TWO_LINES=1  "hello\nworld\n" を1回の send で送る
- *          → 2つのメッセージが1回の recv にまとまることを見る
- *
- * 実験中は送信役(--join)と受信役(--host)を非対称にする。理由は2つ。
- *   - 両側が recv でループすると互いに待ち合ってデッドロックする
- *   - 受信役が送ると、相手が読まないまま切断して RST が飛ぶ
- *     (Connection reset by peer になり観測が汚れる)
- * ------------------------------------------------------------------ */
-#define EXPERIMENT_SLOW_SEND 0
-#define EXPERIMENT_TWO_LINES 0
-
-#define EXPERIMENT (EXPERIMENT_SLOW_SEND || EXPERIMENT_TWO_LINES)
-
-/* 1回で送る */
-static void send_at_once(int fd, const char *msg)
-{
-    if (send(fd, msg, strlen(msg), 0) < 0)
-        perror("send");
-}
-
-/* 1バイトずつ間隔を空けて送る (実験1)。
- * 間隔を空けないと OS がまとめてしまい、分割が観測できない */
-static void send_slowly(int fd, const char *msg)
+static int send_all(int fd, const char *msg)
 {
     size_t len = strlen(msg);
+    size_t sent = 0;
+    ssize_t n = 0;
 
-    for (size_t i = 0; i < len; ++i) {
-        if (send(fd, msg + i, 1, 0) < 0) {
-            perror("send");
-            return;
+    while (sent < len) {
+        n = send(fd, msg + sent, len - sent, 0);
+        if (n < 0 && errno == EINTR) {
+            continue;
         }
-        usleep(100000);
+        if (n < 0) {
+            perror("send");
+            return -1;
+        }
+        sent += n;
     }
+    return 0;
 }
 
-/* 相手が切断するまで recv を繰り返し、1回ごとにバイト数と中身を記録する。
- * recv は NUL 終端しないので %.*s で長さを指定して表示する */
-static void recv_loop(int fd)
+
+static void on_recv(const char *line, void *ctx)
 {
-    char buf[64];
-    int calls = 0;
+    (void)ctx;
+    fprintf(stderr, "[recv] %s\n", line);
+}
+
+typedef struct {
+    int fd;
+    int send_failed;
+} send_ctx_t;
+
+static void on_send(const char *line, void *ctx)
+{
+    send_ctx_t *c = ctx;
+
+    if (c->send_failed) {
+        return;
+    }
+
+    /* 1024 + '\n' + '\0' (送る際には 改行+終端 を追加) */
+    char out[1026];
+    snprintf(out, sizeof out, "%s\n", line);
+
+    if (send_all(c->fd, out) < 0) {
+        c->send_failed = 1;
+        return;
+    }
+    fprintf(stderr, "[sent] %s\n", line);
+}
+
+/**
+*  [キーボード/パイプ] ──→ カーネル ──read──→ stdin_lb ──cb──→ send  ──→ 相手
+*  [相手]              ──→ カーネル ──read──→ sock_lb  ──cb──→ 画面
+* 
+*/
+static int chat_loop(int fd)
+{
+    int status = 0;
+
+    linebuf_t sock_lb = {0};
+    linebuf_t stdin_lb = {0};
+
+    send_ctx_t sctx = {
+        .fd = fd,
+        .send_failed = 0
+    };
+    
+    struct pollfd pfds[2] = {
+        { .fd = STDIN_FILENO, .events = POLLIN }, // stdin
+        { .fd = fd,      .events = POLLIN }       // network socket
+    };    
+
+    int n;
 
     for (;;) {
-        ssize_t n = recv(fd, buf, sizeof buf, 0);
-        calls++;
-
-        if (n < 0) {
-            perror("recv");
-            break;
+       if((n=poll(pfds, 2, 1000)) < 0){
+            if (errno == EINTR) {
+                continue;
+            } else {
+                status = 1;
+                perror("poll");
+                break;        
+            }
         }
         if (n == 0) {
-            fprintf(stderr, "[recv] #%d: peer closed\n", calls);
+            continue;
+        }
+
+        /**
+        * ソケットが先、標準入力が後。POLLHUP が理由。
+        *
+        * POLLHUP は「もう新しくは来ない」であって「もう無い」ではないので、
+        * POLLIN と同じ扱いにして read を試みる。既に届いている分を読み切る
+        * まで抜けてはいけない。読み切ったかどうかは read が 0 を返したか
+        * (linebuf_feed の rc == 0) だけが教えてくれる。
+        *
+        * POLLERR / POLLNVAL は別扱い。POLLNVAL は fd 自体が無効で POLLIN が
+        * 立たないため、処理しないと poll が即座に返り続けて暴走する。
+        */
+        /* ソケットのデータは受信する */
+        if (pfds[1].revents & (POLLIN | POLLHUP)) {
+            int rc = linebuf_feed(&sock_lb, fd, on_recv, NULL);
+            if (rc < 0) {
+                status = 1;
+                fprintf(stderr, "linebuf_feed failed\n");
+                break;
+            }
+            if (rc == 0) {
+                fprintf(stderr, "peer closed\n");
+                break;
+            }
+            /* rc == 1 なら継続 */
+        }
+        if (pfds[1].revents & (POLLERR | POLLNVAL)) {
+            status = 1;
             break;
         }
-        fprintf(stderr, "[recv] #%d: %zd bytes: %.*s\n", calls, n, (int)n, buf);
+
+
+        /* 標準入力のデータは送信する */
+        if (pfds[0].revents & (POLLIN | POLLHUP)) {
+            int rc = linebuf_feed(&stdin_lb, STDIN_FILENO, on_send, &sctx);
+            if (rc < 0) {
+                status = 1;
+                fprintf(stderr, "linebuf_feed failed\n");
+                break;
+            }
+            if (rc == 0) {
+                fprintf(stderr, "stdin closed\n");
+                break;
+            }
+            if (sctx.send_failed) {
+                status = 1;
+                fprintf(stderr, "send failed\n");
+                break;
+            }
+            /* rc == 1 なら継続 */
+        }
+        if (pfds[0].revents & (POLLERR | POLLNVAL)) {
+            status = 1;
+            break;
+        }
     }
-
-    fprintf(stderr, "=== recv を呼んだ回数: %d ===\n", calls);
-}
-
-/* Session 1 の挙動: 挨拶を送り、相手の挨拶を1回受け取る */
-static void exchange_greeting(int fd, const net_config_t *cfg)
-{
-    const char *msg = (cfg->mode == NET_CONNECT) ? "hello from join\n"
-                                                 : "hello from host\n";
-    send_at_once(fd, msg);
-
-    char buf[64];
-    ssize_t n = recv(fd, buf, sizeof buf, 0);
-
-    if (n < 0)
-        perror("recv");
-    else if (n == 0)
-        fprintf(stderr, "peer closed\n");
-    else
-        printf("%.*s", (int)n, buf);  /* 相手の挨拶は既に \n で終わっている */
+    return status;
 }
 
 int main(int argc, char **argv) {
+    signal(SIGPIPE, SIG_IGN);
+
     net_config_t cfg = {0};
 
     if (argc == 3 && strcmp(argv[1], "--host") == 0) {
@@ -111,23 +181,9 @@ int main(int argc, char **argv) {
     int fd = net_connect(&cfg);
     if (fd < 0) return 1;
 
-    if (EXPERIMENT) {
-        /* 実験モード: --join が送るだけ、--host が受けるだけ */
-        if (cfg.mode == NET_CONNECT) {
-            const char *msg = "hello\nworld\n";
-
-            if (EXPERIMENT_SLOW_SEND)
-                send_slowly(fd, msg);
-            else
-                send_at_once(fd, msg);
-        } else {
-            recv_loop(fd);
-        }
-    } else {
-        /* 通常モード: 両側が挨拶を送り合う */
-        exchange_greeting(fd, &cfg);
-    }
-
+    /* 通常モード: 両側が挨拶を送り合う */
+    int status = chat_loop(fd);
     close(fd);
-    return 0;
+    
+    return status;
 }

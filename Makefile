@@ -51,3 +51,17 @@ $(TEST_BUILD_DIR):
 
 test: clean $(TEST_TARGET)
 	./$(TEST_TARGET)
+
+
+# --- フォーマット (.clang-format を使用) ---
+# 要 clang-format: brew install clang-format
+FMT_SRCS := $(shell find src include tests chat -name '*.c' -o -name '*.h')
+
+fmt:
+	clang-format -i $(FMT_SRCS)
+
+# 整形が必要なファイルがあれば非 0 で終わる (CI 用)
+fmt-check:
+	clang-format --dry-run --Werror $(FMT_SRCS)
+
+.PHONY: all clean test fmt fmt-check
